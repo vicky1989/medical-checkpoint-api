@@ -1,6 +1,7 @@
 const fs = require('fs');
 const Tesseract = require('tesseract.js');
 const pdfParse = require('pdf-parse');
+const cloudinary = require('../utils/cloudinary');
 
 exports.handleDocumentUpload = async (req, res) => {
   const filePath = req.file.path;
@@ -9,6 +10,7 @@ exports.handleDocumentUpload = async (req, res) => {
   try {
     let extractedText = '';
 
+    // ⬇️ Step 1: Extract text
     if (mimeType === 'application/pdf') {
       const dataBuffer = fs.readFileSync(filePath);
       const pdfData = await pdfParse(dataBuffer);
@@ -20,11 +22,23 @@ exports.handleDocumentUpload = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Unsupported file type' });
     }
 
-    fs.unlinkSync(filePath); // Clean up uploaded file
+    // ⬇️ Step 2: Upload to Cloudinary
+    const uploadResult = await cloudinary.uploader.upload(filePath, {
+      resource_type: 'auto',
+    });
 
-    res.json({ success: true, text: extractedText.trim() });
+    // ⬇️ Step 3: Clean up local file
+    fs.unlinkSync(filePath);
+
+    // ⬇️ Step 4: Return both extracted text and file URL
+    res.json({
+      success: true,
+      text: extractedText.trim(),
+      fileUrl: uploadResult.secure_url,
+      public_id: uploadResult.public_id,
+    });
   } catch (error) {
-    console.error('OCR error:', error);
-    res.status(500).json({ success: false, message: 'OCR processing failed' });
+    console.error('OCR or Upload error:', error);
+    res.status(500).json({ success: false, message: 'Processing failed' });
   }
 };
